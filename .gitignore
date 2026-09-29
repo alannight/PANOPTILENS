@@ -6,8 +6,14 @@
 # Python
 venv/
 .venv/
+env/
+ENV/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.benchmarks/
 
 # Node
 node_modules/
@@ -20,9 +26,29 @@ out/
 dist/
 build/
 
+# Runtime / evidence
+backend/uploads/
+uploads/
+storage/
+
 # Logs
 *.log
+logs/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.orig
+*~
+
+# TypeScript
+*.tsbuildinfo
