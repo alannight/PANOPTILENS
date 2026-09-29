@@ -51,9 +51,9 @@ async function apiRequest<T>(
       }
 
       throw new APIError(
-        errorData.message || errorData.detail || `HTTP ${response.status}`,
+        errorData.message || errorData.detail?.message || errorData.detail || `HTTP ${response.status}`,
         response.status,
-        errorData.code,
+        errorData.code || errorData.error || errorData.detail?.error,
         errorData
       );
     }
@@ -104,6 +104,7 @@ export interface CaptureMetadata {
   dateTimeOriginal: string | null;
   createDate: string | null;
   modifyDate: string | null;
+  dateTimeDigitized?: string | null;
 }
 
 export interface GeographicMetadata {
@@ -111,14 +112,17 @@ export interface GeographicMetadata {
   longitude: number;
   altitude: number | null;
   gpsTimestamp: string | null;
+  direction?: number | null;
 }
 
 export interface ImageDetails {
   width: number | null;
   height: number | null;
-  orientation: string | null;
+  orientation: string | number | null;
   colorSpace: string | null;
-  resolution: string | null;
+  resolution: unknown | null;
+  format?: string | null;
+  mode?: string | null;
 }
 
 export interface ImageMetadata {
@@ -126,6 +130,18 @@ export interface ImageMetadata {
   capture: CaptureMetadata;
   geographic: GeographicMetadata | null;
   image: ImageDetails;
+  status: "PRESENT" | "NOT_PRESENT" | "FAILED" | string;
+  gpsStatus: "PRESENT" | "NOT_PRESENT" | "INVALID" | string;
+  raw: Record<string, unknown>;
+}
+
+export interface ForensicStatus {
+  mime_validated: boolean | null;
+  magic_bytes_validated: boolean | null;
+  extension_match: boolean | null;
+  image_decoded: boolean | null;
+  metadata_extracted: boolean | null;
+  metadata_consistency: string;
 }
 
 export interface ImageResponse {
@@ -133,9 +149,12 @@ export interface ImageResponse {
   filename: string;
   size: number;
   type: string;
+  format: string | null;
+  mode: string | null;
   url: string;
   hash: ImageHash;
   metadata: ImageMetadata;
+  forensic: ForensicStatus;
   uploadedAt: string;
   caseId?: string | null;
   userId?: string | null;

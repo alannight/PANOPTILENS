@@ -17,8 +17,8 @@ export function ImageGallery({ images }: ImageGalleryProps) {
         >
           <div className="aspect-video overflow-hidden bg-secondary">
             <img
-              src={image.url}
-              alt={image.name}
+              src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${image.url}`}
+              alt={image.filename}
               className="h-full w-full object-cover transition-transform group-hover:scale-105"
             />
           </div>
@@ -26,7 +26,7 @@ export function ImageGallery({ images }: ImageGalleryProps) {
           <div className="p-4">
             <div className="mb-2 flex items-start justify-between gap-2">
               <h3 className="truncate font-semibold text-foreground">
-                {image.name}
+                {image.filename}
               </h3>
               <ExternalLink className="h-4 w-4 flex-shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
             </div>
@@ -43,7 +43,7 @@ export function ImageGallery({ images }: ImageGalleryProps) {
               <div className="mt-2 flex items-center gap-1">
                 <Hash className="h-3 w-3" />
                 <span className="font-mono text-[10px]">
-                  {image.hash.slice(0, 16)}...
+                  {image.hash.sha256.slice(0, 16)}...
                 </span>
               </div>
             </div>

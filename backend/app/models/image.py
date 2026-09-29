@@ -17,10 +17,12 @@ class Image(Base):
     original_filename = Column(String, nullable=False)
     size = Column(Integer, nullable=False)
     mime_type = Column(String, nullable=False)
+    image_format = Column(String, nullable=True)
+    image_mode = Column(String, nullable=True)
     storage_path = Column(String, nullable=False)  # Path or key in storage system
     
     # Foreign keys
-    owner_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    owner_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     case_id = Column(String, ForeignKey("cases.id", ondelete="CASCADE"), nullable=True)
     
     # Timestamps
@@ -78,6 +80,7 @@ class ImageMetadata(Base):
     
     # Capture metadata
     datetime_original = Column(DateTime, nullable=True)
+    datetime_digitized = Column(DateTime, nullable=True)
     create_date = Column(DateTime, nullable=True)
     modify_date = Column(DateTime, nullable=True)
     
@@ -86,6 +89,9 @@ class ImageMetadata(Base):
     gps_longitude = Column(String, nullable=True)
     gps_altitude = Column(String, nullable=True)
     gps_timestamp = Column(String, nullable=True)
+    gps_direction = Column(String, nullable=True)
+    metadata_status = Column(String, nullable=False, default="NOT_PRESENT")
+    gps_status = Column(String, nullable=False, default="NOT_PRESENT")
     
     # Image properties
     width = Column(Integer, nullable=True)
@@ -100,7 +106,7 @@ class ImageMetadata(Base):
     extracted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
-    image = relationship("Image", back_populates="metadata")
+    image = relationship("Image", back_populates="image_metadata")
 
     def __repr__(self):
         return f"<ImageMetadata(image_id={self.image_id})>"
@@ -116,6 +122,7 @@ class ForensicAnalysis(Base):
     mime_validated = Column(Boolean, default=False)
     magic_bytes_validated = Column(Boolean, default=False)
     extension_match = Column(Boolean, default=False)
+    image_decoded = Column(Boolean, default=False)
     
     # Structural analysis
     has_exif = Column(Boolean, default=False)
@@ -123,7 +130,7 @@ class ForensicAnalysis(Base):
     has_thumbnail = Column(Boolean, default=False)
     
     # Integrity
-    metadata_consistent = Column(Boolean, default=True)
+    metadata_consistent = Column(Boolean, nullable=True, default=None)
     timestamp_anomalies = Column(Text, nullable=True)
     
     # Detected anomalies

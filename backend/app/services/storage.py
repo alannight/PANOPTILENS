@@ -4,12 +4,17 @@ Supports local filesystem and future S3-compatible storage
 """
 import os
 import shutil
+import tempfile
 from pathlib import Path
 from typing import BinaryIO, Optional
 from uuid import uuid4
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class UploadTooLargeError(Exception):
+    pass
 
 
 class StorageService:
@@ -40,9 +45,11 @@ class StorageService:
         Returns:
             Full path to file
         """
+        if Path(storage_key).name != storage_key or storage_key in {".", ".."}:
+            raise ValueError("Invalid storage key")
         return self.base_path / storage_key
 
-    def generate_storage_key(self, filename: str) -> str:
+    def generate_storage_key(self, filename: str, image_format: Optional[str] = None) -> str:
         """
         Generate unique storage key for a file
         Uses UUID to prevent conflicts and path traversal
@@ -54,10 +61,44 @@ class StorageService:
             Unique storage key
         """
         # Extract extension safely
-        extension = Path(filename).suffix.lower()
+        extension = {
+            "JPEG": ".jpg",
+            "PNG": ".png",
+            "WEBP": ".webp",
+            "GIF": ".gif",
+        }.get(image_format, Path(filename).suffix.lower())
         # Generate UUID-based key
         unique_id = str(uuid4())
         return f"{unique_id}{extension}"
+
+    def stage_upload(self, file: BinaryIO, max_size: int) -> tuple[Path, int]:
+        """Stream a request to a temporary file, enforcing the limit while reading."""
+        staging_dir = self.base_path / ".staging"
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        descriptor, path_string = tempfile.mkstemp(prefix="upload-", dir=staging_dir)
+        staged_path = Path(path_string)
+        size = 0
+        try:
+            with os.fdopen(descriptor, "wb") as destination:
+                while chunk := file.read(64 * 1024):
+                    size += len(chunk)
+                    if size > max_size:
+                        raise UploadTooLargeError
+                    destination.write(chunk)
+                destination.flush()
+                os.fsync(destination.fileno())
+            if size == 0:
+                raise ValueError("Empty upload")
+            return staged_path, size
+        except Exception:
+            staged_path.unlink(missing_ok=True)
+            raise
+
+    def promote(self, staged_path: Path, storage_key: str) -> Path:
+        """Atomically move a validated staged file into permanent storage."""
+        destination = self._get_storage_path(storage_key)
+        os.replace(staged_path, destination)
+        return destination
 
     def save(self, file: BinaryIO, storage_key: str) -> str:
         """
@@ -129,20 +170,6 @@ class StorageService:
         """
         file_path = self._get_storage_path(storage_key)
         return file_path if file_path.exists() else None
-
-    def get_url(self, storage_key: str) -> str:
-        """
-        Get URL for accessing file (for local storage, returns relative path)
-        
-        Args:
-            storage_key: Unique storage identifier
-            
-        Returns:
-            URL/path to access file
-        """
-        # For local storage, return relative path
-        # In production with S3, this would return signed URL
-        return f"/uploads/{storage_key}"
 
     def exists(self, storage_key: str) -> bool:
         """

@@ -32,17 +32,6 @@ export function ImageUpload({ onUploadComplete, caseId }: ImageUploadProps) {
     setUploadProgress("Validating file...");
 
     try {
-      // Client-side validation
-      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-      if (!validTypes.includes(file.type)) {
-        throw new Error("Unsupported file type. Please upload JPG, PNG, or WEBP.");
-      }
-
-      const maxSize = 10 * 1024 * 1024;
-      if (file.size > maxSize) {
-        throw new Error("File size exceeds 10MB limit.");
-      }
-
       setUploadProgress("Uploading to server...");
 
       // Call backend API
@@ -120,7 +109,7 @@ export function ImageUpload({ onUploadComplete, caseId }: ImageUploadProps) {
           <input
             type="file"
             onChange={handleFileSelect}
-            accept="image/jpeg,image/jpg,image/png,image/webp"
+            accept=".jpg,.jpeg,.png,.webp,.gif"
             className="absolute inset-0 cursor-pointer opacity-0"
           />
           
@@ -136,7 +125,7 @@ export function ImageUpload({ onUploadComplete, caseId }: ImageUploadProps) {
           
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <FileImage className="h-4 w-4" />
-            <span>JPG, PNG, WEBP • Max 10MB</span>
+            <span>JPG, PNG, WEBP, GIF • Server size limit applies</span>
           </div>
         </div>
       )}

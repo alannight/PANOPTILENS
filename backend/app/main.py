@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 import os
 
 from app.api import images, cases, metadata, forensics
@@ -26,10 +25,6 @@ app.add_middleware(
 # Create upload directory if it doesn't exist
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# Mount static files for uploads
-if os.path.exists(UPLOAD_DIR):
-    app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Include routers
 app.include_router(images.router, prefix="/api/images", tags=["images"])

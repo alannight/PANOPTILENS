@@ -14,15 +14,11 @@ piexif==1.1.3
 exifread==3.0.0
 
 # Hashing & Crypto
-hashlib-wrapper==1.1.0
-
 # Validation
 pydantic==2.10.6
 pydantic-settings==2.7.1
 
 # CORS
-python-cors==1.0.0
-
 # Environment
 python-dotenv==1.0.1
 

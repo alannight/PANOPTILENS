@@ -1,5 +1,6 @@
 import { Copy, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
+import type { ImageResponse } from "@/lib/api-client";
 
 interface ForensicAnalysisProps {
   hashes: {
@@ -8,7 +9,7 @@ interface ForensicAnalysisProps {
     sha256: string;
     sha512: string;
   };
-  imageData: any;
+  imageData: ImageResponse;
 }
 
 export function ForensicAnalysis({ hashes, imageData }: ForensicAnalysisProps) {
@@ -39,7 +40,7 @@ export function ForensicAnalysis({ hashes, imageData }: ForensicAnalysisProps) {
           <div className="flex justify-between">
             <span className="text-muted-foreground">Extension</span>
             <span className="font-mono text-foreground">
-              {imageData.name.split(".").pop()?.toUpperCase()}
+              {imageData.filename.split(".").pop()?.toUpperCase()}
             </span>
           </div>
           <div className="flex justify-between">
@@ -90,17 +91,27 @@ export function ForensicAnalysis({ hashes, imageData }: ForensicAnalysisProps) {
 
       {/* Metadata Integrity */}
       <div className="mt-6 rounded-md border border-border bg-secondary/50 p-4">
-        <h3 className="mb-2 text-sm font-semibold text-foreground">
-          Metadata Integrity
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          No anomalies detected in file structure or metadata timestamps.
-        </p>
-        <div className="mt-2 flex items-center gap-2">
-          <div className="h-1.5 w-1.5 rounded-full bg-success" />
-          <span className="text-xs text-success">VERIFIED</span>
+        <h3 className="mb-3 text-sm font-semibold text-foreground">Validation Status</h3>
+        <div className="space-y-2 text-xs">
+          <ValidationRow label="File signature" value={imageData.forensic.magic_bytes_validated} />
+          <ValidationRow label="Image decoded" value={imageData.forensic.image_decoded} />
+          <ValidationRow label="Extension matches content" value={imageData.forensic.extension_match} />
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Metadata consistency</span>
+            <span className="font-mono text-foreground">{imageData.forensic.metadata_consistency}</span>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ValidationRow({ label, value }: { label: string; value: boolean | null }) {
+  const text = value === true ? "VALIDATED" : value === false ? "FAILED" : "NOT CHECKED";
+  return (
+    <div className="flex justify-between">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono text-foreground">{text}</span>
     </div>
   );
 }

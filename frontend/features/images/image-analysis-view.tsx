@@ -140,7 +140,7 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
               <div className="overflow-hidden rounded-lg border border-border bg-card">
                 <div className="aspect-[4/3] overflow-hidden bg-secondary">
                   <img
-                    src={imageData.url}
+                    src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${imageData.url}`}
                     alt={imageData.filename}
                     className="h-full w-full object-contain"
                   />
@@ -204,7 +204,7 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
                 <LocationMap
                   latitude={imageData.metadata.geographic.latitude}
                   longitude={imageData.metadata.geographic.longitude}
-                  altitude={imageData.metadata.geographic.altitude}
+                  altitude={imageData.metadata.geographic.altitude ?? undefined}
                 />
               </div>
             )}

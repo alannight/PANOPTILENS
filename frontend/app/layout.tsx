@@ -24,17 +24,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    {/*
-      Browser extensions can inject attributes/classes into <html> before
-      React hydrates the page. The app's markup is otherwise deterministic,
-      so allow those externally-added attributes without reporting a false
-      hydration mismatch.
-    */}
     <html
       lang="en"
       className={`${inter.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
+      {/* Browser extensions can mutate html attributes before hydration. */}
       <body className="antialiased">
         <div className="flex h-screen w-full overflow-hidden">
           <Sidebar />
