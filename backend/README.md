@@ -1,179 +1,52 @@
 # PANOPTILENS Backend
 
-FastAPI backend for the PANOPTILENS Photo Forensics & OSINT Intelligence Platform.
+FastAPI backend for the Phase 1 image-processing workflow. This is a development prototype, not a production evidence service.
 
-## Features
+## Implemented Image API
 
-- **Image Upload & Processing** - Secure file upload with validation
-- **Metadata Extraction** - EXIF, GPS, camera information extraction
-- **Cryptographic Hashing** - MD5, SHA-1, SHA-256, SHA-512 calculation
-- **Forensic Analysis** - File integrity and anomaly detection
-- **Case Management** - Investigation case organization
-- **REST API** - Clean, documented API endpoints
+- `POST /api/images/upload` validates JPEG, PNG, WebP, and GIF content, checks Pillow decoding and dimensions, hashes original bytes, extracts EXIF/GPS, and persists image and analysis records.
+- `GET /api/images/` lists persisted images.
+- `GET /api/images/{image_id}` returns persisted image properties, hashes, metadata, and validation statuses.
+- `GET /api/images/{image_id}/file` serves the stored original after looking up the image record.
+- `DELETE /api/images/{image_id}` removes the record and attempts storage cleanup.
 
-## Setup
+Case routes are demo stubs. The separate metadata and forensics routes currently return not-found responses; their models/data appear in the image detail response instead. OCR, OSINT, background jobs, evidence workflows, and case authorization are not implemented.
 
-### Prerequisites
+## Local Development
 
-- Python 3.11+
-- pip or pipenv
-- PostgreSQL (optional, for production)
+Requirements: Python and a local PostgreSQL database.
 
-### Installation
-
-1. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Linux/Mac
-   # or
-   venv\Scripts\activate  # Windows
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-4. **Create upload directory**
-   ```bash
-   mkdir uploads
-   ```
-
-### Running
-
-**Development Server**
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
 ```
 
-The API will be available at:
-- API: http://localhost:8000
-- Interactive Docs: http://localhost:8000/docs
-- Alternative Docs: http://localhost:8000/redoc
+Set `DATABASE_URL`, keep `APP_ENV=development` only on a trusted local machine, then apply migrations and run the API:
 
-## API Endpoints
-
-### Images
-
-- `POST /api/images/upload` - Upload and analyze an image
-- `GET /api/images/{image_id}` - Get image details
-- `DELETE /api/images/{image_id}` - Delete an image
-
-### Cases
-
-- `POST /api/cases/` - Create a new case
-- `GET /api/cases/` - List all cases
-- `GET /api/cases/{case_id}` - Get case details
-
-### Metadata
-
-- `GET /api/metadata/{image_id}` - Get image metadata
-
-### Forensics
-
-- `GET /api/forensics/{image_id}` - Get forensic analysis
-
-## Project Structure
-
-```
-backend/
-├── app/
-│   ├── api/              # API route handlers
-│   │   ├── images.py     # Image upload & management
-│   │   ├── cases.py      # Case management
-│   │   ├── metadata.py   # Metadata endpoints
-│   │   └── forensics.py  # Forensic analysis
-│   ├── models/           # Database models (SQLAlchemy)
-│   ├── schemas/          # Pydantic schemas
-│   │   ├── image.py      # Image-related schemas
-│   │   └── case.py       # Case-related schemas
-│   ├── services/         # Business logic
-│   │   ├── metadata_extractor.py  # EXIF extraction
-│   │   └── hash_calculator.py     # Cryptographic hashing
-│   ├── workers/          # Background job workers
-│   └── main.py           # FastAPI application
-├── tests/                # Test files
-├── uploads/              # Uploaded files (gitignored)
-├── requirements.txt      # Python dependencies
-├── .env.example         # Environment variables template
-└── README.md            # This file
-```
-
-## Security Features
-
-- **File Validation** - Extension and MIME type checking
-- **Size Limits** - Configurable maximum file size
-- **Unique Filenames** - UUID-based naming to prevent conflicts
-- **CORS Protection** - Configurable allowed origins
-- **Input Sanitization** - Pydantic validation on all inputs
-
-## Configuration
-
-Key environment variables in `.env`:
-
-```env
-DATABASE_URL=postgresql://user:pass@localhost:5432/panoptilens
-SECRET_KEY=your-secret-key
-ALLOWED_ORIGINS=http://localhost:3000
-MAX_UPLOAD_SIZE=10485760
-UPLOAD_DIR=./uploads
-```
-
-## Development
-
-**Run tests**
 ```bash
-pytest
+./venv/bin/alembic upgrade head
+./venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
-**Code formatting**
+Interactive API docs are available at `http://localhost:8000/docs`.
+
+## Configuration and Safety
+
+- `MAX_UPLOAD_SIZE` defaults to 10 MiB and is enforced while streaming into temporary staging.
+- `MAX_IMAGE_PIXELS` defaults to 40 million decoded pixels.
+- File format is detected from content signatures and Pillow decoding; browser MIME is not authoritative.
+- Hashes are calculated from original upload bytes. Original files are stored locally under UUID-based names.
+- EXIF presence and hashes do not prove image authenticity. Metadata consistency is not assessed.
+
+Image endpoints deliberately fail closed outside `APP_ENV=development` because authentication and per-user authorization are not implemented. Development mode is unauthenticated and must never be exposed to a network. Uploaded files are not mounted as a public static directory.
+
+## Tests
+
 ```bash
-black app/
+./venv/bin/python -m pytest -q
 ```
 
-**Type checking**
-```bash
-mypy app/
-```
-
-## Metadata Extraction
-
-The metadata extractor supports:
-
-- Camera make and model
-- Lens information
-- Capture timestamps
-- GPS coordinates (latitude, longitude, altitude)
-- Image dimensions and properties
-- Color space and resolution
-- Software information
-
-## Hash Calculation
-
-Supports multiple hash algorithms:
-- MD5 (legacy, for compatibility)
-- SHA-1 (legacy, for compatibility)
-- SHA-256 (recommended)
-- SHA-512 (maximum security)
-
-## Production Deployment
-
-For production deployment:
-
-1. Use a production WSGI server (Gunicorn + Uvicorn workers)
-2. Set up PostgreSQL database
-3. Configure Redis for background jobs
-4. Use object storage (S3, MinIO) instead of local filesystem
-5. Enable HTTPS
-6. Set up monitoring and logging
-7. Configure backup procedures
-
-## License
-
-Part of the PANOPTILENS project.
+Tests use synthetic images and a temporary SQLite database. See the root [TESTING_GUIDE.md](../TESTING_GUIDE.md) for coverage and frontend checks. Root [GETTING_STARTED.md](../GETTING_STARTED.md) describes running the full application.

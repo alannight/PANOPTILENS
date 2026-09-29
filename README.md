@@ -32,7 +32,7 @@ The overview dashboard still contains demo values. Validation and hashes are use
 
 ## Local Setup
 
-See [GETTING_STARTED.md](GETTING_STARTED.md) for PostgreSQL configuration, migration commands, and frontend/backend startup. See [TESTING_GUIDE.md](TESTING_GUIDE.md) for automated checks and coverage.
+See [GETTING_STARTED.md](GETTING_STARTED.md) for local setup, [ARCHITECTURE.md](ARCHITECTURE.md) for the implemented pipeline and trust boundaries, and [TESTING_GUIDE.md](TESTING_GUIDE.md) for checks and coverage. Backend-specific setup and API details are in [backend/README.md](backend/README.md).
 
 ## Project Map
 
