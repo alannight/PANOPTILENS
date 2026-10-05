@@ -105,6 +105,22 @@ export interface CaptureMetadata {
   createDate: string | null;
   modifyDate: string | null;
   dateTimeDigitized?: string | null;
+  offsetTimeOriginal?: string | null;
+  offsetTimeDigitized?: string | null;
+  offsetTime?: string | null;
+  timezoneUnknown?: boolean;
+  timezoneUnknowns?: Record<string, boolean>;
+  serverReceivedAt?: string | null;
+  fileUploadTimestamp?: string | null;
+}
+
+export interface AddressMetadata {
+  country: string | null;
+  province: string | null;
+  city: string | null;
+  district: string | null;
+  road: string | null;
+  formatted: string | null;
 }
 
 export interface GeographicMetadata {
@@ -113,6 +129,7 @@ export interface GeographicMetadata {
   altitude: number | null;
   gpsTimestamp: string | null;
   direction?: number | null;
+  address?: AddressMetadata | null;
 }
 
 export interface ImageDetails {
@@ -133,6 +150,7 @@ export interface ImageMetadata {
   status: "PRESENT" | "NOT_PRESENT" | "FAILED" | string;
   gpsStatus: "PRESENT" | "NOT_PRESENT" | "INVALID" | string;
   raw: Record<string, unknown>;
+  derived?: Record<string, unknown>;
 }
 
 export interface ForensicStatus {
@@ -156,8 +174,36 @@ export interface ImageResponse {
   metadata: ImageMetadata;
   forensic: ForensicStatus;
   uploadedAt: string;
+  processedAt: string | null;
+  metadataExtractedAt: string | null;
   caseId?: string | null;
   userId?: string | null;
+  isDeleted: boolean;
+  deletedAt: string | null;
+  tags: string[];
+  analystNotes: string | null;
+}
+
+export interface BulkUploadResponse {
+  results: ImageResponse[];
+  errors: Array<{ filename: string | null; error: string; message: string }>;
+}
+
+export interface IntegrityVerification {
+  imageId: string;
+  status: "VERIFIED" | "TAMPERED" | "MISSING" | "UNREADABLE";
+  expectedSha256: string;
+  actualSha256: string | null;
+  checkedAt: string;
+}
+
+export interface DeletionAuditEntry {
+  id: string;
+  imageId: string;
+  filename: string;
+  sha256: string | null;
+  action: "SOFT_DELETE" | "HARD_DELETE";
+  occurredAt: string;
 }
 
 export interface CaseResponse {
@@ -193,6 +239,20 @@ export async function uploadImage(
   }, 60000); // 60s timeout for upload
 }
 
+export async function uploadImages(
+  files: File[],
+  caseId?: string
+): Promise<BulkUploadResponse> {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file));
+  if (caseId) formData.append("case_id", caseId);
+
+  return apiRequest<BulkUploadResponse>("/api/images/upload/bulk", {
+    method: "POST",
+    body: formData,
+  }, 300000);
+}
+
 /**
  * Get image details by ID
  */
@@ -215,6 +275,45 @@ export async function deleteImage(imageId: string): Promise<void> {
   return apiRequest<void>(`/api/images/${imageId}`, {
     method: 'DELETE',
   });
+}
+
+export async function getTrashImages(): Promise<ImageResponse[]> {
+  return apiRequest<ImageResponse[]>("/api/images/trash");
+}
+
+export async function restoreImage(imageId: string): Promise<ImageResponse> {
+  return apiRequest<ImageResponse>(`/api/images/trash/${imageId}/restore`, { method: "POST" });
+}
+
+export async function hardDeleteImage(imageId: string): Promise<void> {
+  return apiRequest<void>(`/api/images/trash/${imageId}`, { method: "DELETE" });
+}
+
+export async function emptyTrash(): Promise<{ deleted: string[]; failed: Array<{ id: string; message: string }> }> {
+  return apiRequest("/api/images/trash/empty/all", { method: "DELETE" });
+}
+
+export async function updateImageAnnotations(
+  imageId: string,
+  annotations: { tags?: string[]; analystNotes?: string | null }
+): Promise<{ tags: string[]; analystNotes: string | null }> {
+  return apiRequest(`/api/images/${imageId}/annotations`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(annotations),
+  });
+}
+
+export async function verifyImageIntegrity(imageId: string): Promise<IntegrityVerification> {
+  return apiRequest<IntegrityVerification>(`/api/images/${imageId}/verify-integrity`, { method: "POST" });
+}
+
+export function imageReportUrl(imageId: string): string {
+  return `${API_BASE_URL}/api/images/${imageId}/export`;
+}
+
+export function caseReportUrl(caseId: string): string {
+  return `${API_BASE_URL}/api/cases/${caseId}/export`;
 }
 
 /**

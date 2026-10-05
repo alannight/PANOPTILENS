@@ -26,7 +26,7 @@ class Case(Base):
     status = Column(Enum(CaseStatus), default=CaseStatus.ACTIVE, nullable=False)
     
     # Foreign keys
-    owner_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    owner_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

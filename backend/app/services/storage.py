@@ -66,6 +66,9 @@ class StorageService:
             "PNG": ".png",
             "WEBP": ".webp",
             "GIF": ".gif",
+            "BMP": ".bmp",
+            "TIFF": ".tif",
+            "AVIF": ".avif",
         }.get(image_format, Path(filename).suffix.lower())
         # Generate UUID-based key
         unique_id = str(uuid4())
@@ -182,6 +185,27 @@ class StorageService:
             True if file exists
         """
         return self._get_storage_path(storage_key).exists()
+
+    def quarantine(self, storage_key: str) -> Optional[Path]:
+        """Move evidence out of active storage until its database delete commits."""
+        source = self.get(storage_key)
+        if source is None:
+            return None
+        quarantine_dir = self.base_path / ".deleted"
+        quarantine_dir.mkdir(parents=True, exist_ok=True)
+        destination = quarantine_dir / f"{uuid4()}-{source.name}"
+        os.replace(source, destination)
+        return destination
+
+    def restore_quarantined(self, quarantined_path: Path, storage_key: str) -> None:
+        """Restore a quarantined file if the database transaction did not commit."""
+        if quarantined_path.exists():
+            os.replace(quarantined_path, self._get_storage_path(storage_key))
+
+    @staticmethod
+    def purge_quarantined(quarantined_path: Path) -> None:
+        """Permanently remove a quarantined evidence file after commit."""
+        quarantined_path.unlink(missing_ok=True)
 
     def delete(self, storage_key: str) -> bool:
         """

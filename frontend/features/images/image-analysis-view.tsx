@@ -1,21 +1,38 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Eye, ArrowLeft, MapPin, Loader2, AlertCircle } from "lucide-react";
+import { Eye, ArrowLeft, MapPin, Loader2, AlertCircle, Download, Save, ShieldCheck, ShieldAlert, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ImageMetadata } from "./image-metadata";
 import { ForensicAnalysis } from "./forensic-analysis";
 import { LocationMap } from "@/components/location-map";
-import { getImage, ImageResponse, APIError } from "@/lib/api-client";
+import {
+  APIError,
+  deleteImage,
+  getImage,
+  imageReportUrl,
+  ImageResponse,
+  IntegrityVerification,
+  updateImageAnnotations,
+  verifyImageIntegrity,
+} from "@/lib/api-client";
+import { getExifOrientationStyle } from "./image-orientation";
 
 interface ImageAnalysisViewProps {
   imageId: string;
 }
 
 export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
+  const router = useRouter();
   const [imageData, setImageData] = useState<ImageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
+  const [tags, setTags] = useState("");
+  const [savingAnnotations, setSavingAnnotations] = useState(false);
+  const [integrity, setIntegrity] = useState<IntegrityVerification | null>(null);
+  const [integrityError, setIntegrityError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -29,6 +46,8 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
         
         if (mounted) {
           setImageData(data);
+          setNotes(data.analystNotes ?? "");
+          setTags((data.tags ?? []).join(", "));
           setLoading(false);
         }
       } catch (err) {
@@ -55,6 +74,40 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
       mounted = false;
     };
   }, [imageId]);
+
+  const saveAnnotations = async () => {
+    setSavingAnnotations(true);
+    try {
+      const updated = await updateImageAnnotations(imageId, {
+        tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+        analystNotes: notes,
+      });
+      setImageData((current) => current ? { ...current, ...updated } : current);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save annotations.");
+    } finally {
+      setSavingAnnotations(false);
+    }
+  };
+
+  const checkIntegrity = async () => {
+    setIntegrityError(null);
+    try {
+      setIntegrity(await verifyImageIntegrity(imageId));
+    } catch (err) {
+      setIntegrityError(err instanceof Error ? err.message : "Integrity check failed.");
+    }
+  };
+
+  const moveToTrash = async () => {
+    if (!window.confirm("Move this image to Trash? It can be restored later.")) return;
+    try {
+      await deleteImage(imageId);
+      router.push("/images");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to move image to Trash.");
+    }
+  };
 
   // Loading state
   if (loading) {
@@ -132,6 +185,26 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
           </p>
         </div>
 
+        {error && <p role="alert" className="mb-4 text-sm text-destructive">{error}</p>}
+        <div className="mb-6 flex flex-wrap items-center gap-3 border-y border-border py-4">
+          <button type="button" onClick={checkIntegrity} className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary">
+            <ShieldCheck className="h-4 w-4" /> Verify Integrity
+          </button>
+          <a href={imageReportUrl(imageData.id)} className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary">
+            <Download className="h-4 w-4" /> Export JSON
+          </a>
+          <button type="button" onClick={moveToTrash} className="inline-flex items-center gap-2 rounded-md border border-destructive/50 px-3 py-2 text-sm text-destructive hover:bg-destructive/10">
+            <Trash2 className="h-4 w-4" /> Move to Trash
+          </button>
+          {integrity && (
+            <div className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${integrity.status === "VERIFIED" ? "bg-success/15 text-success" : integrity.status === "TAMPERED" || integrity.status === "MISSING" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning"}`}>
+              {integrity.status === "VERIFIED" ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+              {integrity.status === "VERIFIED" ? "Verified / Intact" : integrity.status === "TAMPERED" ? "Tampered / Corrupted" : integrity.status}
+            </div>
+          )}
+          {integrityError && <span role="alert" className="text-sm text-destructive">{integrityError}</span>}
+        </div>
+
         {/* Split View */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Left: Image Preview */}
@@ -143,6 +216,7 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
                     src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${imageData.url}`}
                     alt={imageData.filename}
                     className="h-full w-full object-contain"
+                    style={getExifOrientationStyle(imageData.metadata.image.orientation)}
                   />
                 </div>
                 <div className="border-t border-border p-4">
@@ -190,6 +264,31 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
 
           {/* Right: Analysis Tabs */}
           <div className="space-y-6">
+            <section className="rounded-lg border border-border bg-card p-6">
+              <h2 className="mb-4 text-lg font-semibold text-foreground">Analyst Annotations</h2>
+              <label htmlFor="image-tags" className="mb-2 block text-sm text-muted-foreground">Tags, comma separated</label>
+              <input
+                id="image-tags"
+                value={tags}
+                onChange={(event) => setTags(event.target.value)}
+                className="mb-4 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                placeholder="suspicious, network"
+              />
+              <label htmlFor="analyst-notes" className="mb-2 block text-sm text-muted-foreground">Findings and notes</label>
+              <textarea
+                id="analyst-notes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                rows={5}
+                className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                placeholder="Record observations for this evidence item"
+              />
+              <div className="mt-4 flex justify-end">
+                <button type="button" onClick={saveAnnotations} disabled={savingAnnotations} className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm text-accent-foreground disabled:opacity-60">
+                  <Save className="h-4 w-4" /> {savingAnnotations ? "Saving..." : "Save Annotations"}
+                </button>
+              </div>
+            </section>
             <ForensicAnalysis hashes={imageData.hash} imageData={imageData} />
             
             {/* GPS Location Map */}

@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { Upload, FileImage, AlertCircle, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { uploadImage, APIError, ImageResponse } from "@/lib/api-client";
+import { uploadImages, APIError, ImageResponse } from "@/lib/api-client";
 
 interface ImageUploadProps {
   onUploadComplete: (imageData: ImageResponse) => void;
@@ -26,23 +26,25 @@ export function ImageUpload({ onUploadComplete, caseId }: ImageUploadProps) {
     setIsDragging(false);
   }, []);
 
-  const processImage = async (file: File) => {
+  const processImages = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+    if (files.length > 20) {
+      setError("Choose no more than 20 images per upload.");
+      return;
+    }
     setIsProcessing(true);
     setError(null);
-    setUploadProgress("Validating file...");
+    setUploadProgress(`Preparing ${files.length} image${files.length === 1 ? "" : "s"}...`);
 
     try {
-      setUploadProgress("Uploading to server...");
-
-      // Call backend API
-      const imageData = await uploadImage(file, caseId);
-
-      setUploadProgress("Upload complete!");
+      setUploadProgress(`Uploading ${files.length} image${files.length === 1 ? "" : "s"}...`);
+      const result = await uploadImages(files, caseId);
+      result.results.forEach(onUploadComplete);
+      setUploadProgress(`Upload complete: ${result.results.length} saved`);
+      if (result.errors.length > 0) {
+        setError(`${result.errors.length} file${result.errors.length === 1 ? "" : "s"} failed: ${result.errors.map((item) => item.filename ?? "unnamed file").join(", ")}`);
+      }
       
-      // Pass real server response to parent
-      onUploadComplete(imageData);
-      
-      // Reset after short delay
       setTimeout(() => {
         setIsProcessing(false);
         setUploadProgress("");
@@ -52,7 +54,7 @@ export function ImageUpload({ onUploadComplete, caseId }: ImageUploadProps) {
       if (err instanceof APIError) {
         // Handle specific API errors
         if (err.status === 413) {
-          setError("File size exceeds server limit (10MB)");
+          setError("File size exceeds the configured server limit.");
         } else if (err.status === 400) {
           setError(err.message || "Invalid file format");
         } else if (err.status === 408) {
@@ -70,26 +72,21 @@ export function ImageUpload({ onUploadComplete, caseId }: ImageUploadProps) {
       setIsProcessing(false);
       setUploadProgress("");
     }
-  };
+  }, [caseId, onUploadComplete]);
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
 
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) {
-        await processImage(files[0]);
-      }
+      await processImages(Array.from(e.dataTransfer.files));
     },
-    [caseId, onUploadComplete]
+    [processImages]
   );
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      await processImage(files[0]);
-    }
+    await processImages(Array.from(e.target.files ?? []));
+    e.target.value = "";
   };
 
   return (
@@ -109,7 +106,8 @@ export function ImageUpload({ onUploadComplete, caseId }: ImageUploadProps) {
           <input
             type="file"
             onChange={handleFileSelect}
-            accept=".jpg,.jpeg,.png,.webp,.gif"
+            accept=".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.dng,.cr2,.nef,.arw"
+            multiple
             className="absolute inset-0 cursor-pointer opacity-0"
           />
           
@@ -125,28 +123,28 @@ export function ImageUpload({ onUploadComplete, caseId }: ImageUploadProps) {
           
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <FileImage className="h-4 w-4" />
-            <span>JPG, PNG, WEBP, GIF • Server size limit applies</span>
+            <span>JPG, PNG, WEBP, GIF, HEIC, HEIF, DNG, CR2, NEF, ARW • Up to 20 files</span>
           </div>
         </div>
       )}
 
       {isProcessing && (
         <div className="flex min-h-[300px] flex-col items-center justify-center">
-          {uploadProgress === "Upload complete!" ? (
+          {uploadProgress.startsWith("Upload complete") ? (
             <CheckCircle2 className="mb-4 h-12 w-12 text-success" />
           ) : (
             <Loader2 className="mb-4 h-12 w-12 animate-spin text-accent" />
           )}
           
           <h3 className="mb-2 text-lg font-semibold text-foreground">
-            {uploadProgress === "Upload complete!" ? "Success" : "Processing Image"}
+            {uploadProgress.startsWith("Upload complete") ? "Upload complete" : "Processing images"}
           </h3>
           
           <p className="font-mono text-sm text-accent">
             {uploadProgress}
           </p>
           
-          {uploadProgress !== "Upload complete!" && (
+          {!uploadProgress.startsWith("Upload complete") && (
             <div className="mt-6 text-center text-xs text-muted-foreground">
               <p>Server is processing your image</p>
               <p className="mt-1">This includes:</p>

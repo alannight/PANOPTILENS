@@ -35,9 +35,9 @@ Interactive API docs are available at `http://localhost:8000/docs`.
 
 ## Configuration and Safety
 
-- `MAX_UPLOAD_SIZE` defaults to 10 MiB and is enforced while streaming into temporary staging.
+- `MAX_UPLOAD_SIZE` defaults to 100 MiB and is enforced while streaming into temporary staging.
 - `MAX_IMAGE_PIXELS` defaults to 40 million decoded pixels.
-- File format is detected from content signatures and Pillow decoding; browser MIME is not authoritative.
+- File format is detected from content signatures and full decoding; browser MIME is not authoritative. HEIF/HEIC uses Pillow-HEIF. DNG/CR2/NEF/ARW additionally require camera metadata and successful LibRaw decoding.
 - Hashes are calculated from original upload bytes. Original files are stored locally under UUID-based names.
 - EXIF presence and hashes do not prove image authenticity. Metadata consistency is not assessed.
 

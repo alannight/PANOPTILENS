@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:unit": "node --test features/images/*.test.ts",
     "lint": "next lint"
   },
   "dependencies": {

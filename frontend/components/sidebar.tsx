@@ -78,20 +78,14 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Case Info */}
       <div className="border-t border-border p-4">
         <div className="rounded-md bg-secondary p-3">
           <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Eye className="h-3 w-3" />
-            CURRENT CASE
+            INVESTIGATION
           </div>
-          <div className="font-mono text-sm font-bold text-foreground">
-            PL-2026-001
-          </div>
-          <div className="mt-1 flex items-center gap-2">
-            <div className="h-1.5 w-1.5 rounded-full bg-success" />
-            <span className="text-xs font-medium text-success">ACTIVE</span>
-          </div>
+          <div className="text-sm font-medium text-foreground">Image workspace</div>
+          <p className="mt-1 text-xs text-muted-foreground">Investigation case workspace</p>
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List
 from datetime import datetime
 
 
@@ -20,6 +20,22 @@ class CaptureMetadata(BaseModel):
     createDate: Optional[str] = None
     modifyDate: Optional[str] = None
     dateTimeDigitized: Optional[str] = None
+    offsetTimeOriginal: Optional[str] = None
+    offsetTimeDigitized: Optional[str] = None
+    offsetTime: Optional[str] = None
+    timezoneUnknown: bool = True
+    timezoneUnknowns: Dict[str, bool] = Field(default_factory=dict)
+    serverReceivedAt: Optional[str] = None
+    fileUploadTimestamp: Optional[str] = None
+
+
+class AddressData(BaseModel):
+    country: Optional[str] = None
+    province: Optional[str] = None
+    city: Optional[str] = None
+    district: Optional[str] = None
+    road: Optional[str] = None
+    formatted: Optional[str] = None
 
 
 class GeographicMetadata(BaseModel):
@@ -28,6 +44,7 @@ class GeographicMetadata(BaseModel):
     altitude: Optional[float] = None
     gpsTimestamp: Optional[str] = None
     direction: Optional[float] = None
+    address: Optional[AddressData] = None
 
 
 class ImageDetails(BaseModel):
@@ -48,6 +65,8 @@ class ImageMetadata(BaseModel):
     status: str = "NOT_PRESENT"
     gpsStatus: str = "NOT_PRESENT"
     raw: Dict[str, Any] = Field(default_factory=dict)
+    derived: Dict[str, Any] = Field(default_factory=dict)
+    fieldSources: Dict[str, Optional[str]] = Field(default_factory=dict)
 
 
 class HashData(BaseModel):
@@ -80,6 +99,26 @@ class ImageResponse(BaseModel):
     metadata: ImageMetadata
     forensic: ForensicStatus = Field(default_factory=ForensicStatus)
     uploadedAt: datetime
+    processedAt: Optional[datetime] = None
+    metadataExtractedAt: Optional[datetime] = None
+    isDeleted: bool = False
+    deletedAt: Optional[datetime] = None
+    tags: List[str] = Field(default_factory=list)
+    analystNotes: Optional[str] = None
     
     class Config:
         from_attributes = True
+
+
+class ImageAnnotationsUpdate(BaseModel):
+    tags: Optional[List[str]] = None
+    analystNotes: Optional[str] = None
+
+
+class DeletionAuditResponse(BaseModel):
+    id: str
+    imageId: str
+    filename: str
+    sha256: Optional[str] = None
+    action: str
+    occurredAt: datetime

@@ -7,6 +7,7 @@ interface ImageMetadataProps {
 
 export function ImageMetadata({ metadata }: ImageMetadataProps) {
   const hasDeviceMetadata = Boolean(metadata.camera.make || metadata.camera.model);
+  const fileSystemTimestamps = metadata.derived?.fileSystemTimestamps as Record<string, string | null> | undefined;
   const technicalFields = [
     "LensMake", "FNumber", "ExposureTime", "ISOSpeedRatings", "FocalLength",
     "Flash", "WhiteBalance", "MeteringMode", "ExposureProgram", "DateTimeDigitized",
@@ -55,21 +56,33 @@ export function ImageMetadata({ metadata }: ImageMetadataProps) {
         </div>
         <div className="space-y-2 text-sm">
           <MetadataField
-            label="Date/Time Original"
+            label={metadata.capture.dateTimeOriginal && metadata.capture.timezoneUnknowns?.capturedAt
+              ? "Captured At (timezone unknown)"
+              : "Captured At"}
             value={metadata.capture.dateTimeOriginal}
             mono
           />
           <MetadataField
-            label="Create Date"
-            value={metadata.capture.createDate}
+            label={metadata.capture.dateTimeDigitized && metadata.capture.timezoneUnknowns?.digitizedAt
+              ? "Digitized At (timezone unknown)"
+              : "Digitized At"}
+            value={metadata.capture.dateTimeDigitized ?? metadata.capture.createDate}
             mono
           />
           <MetadataField
-            label="Modify Date"
+            label={metadata.capture.modifyDate && metadata.capture.timezoneUnknowns?.modifiedAt
+              ? "Modified At (timezone unknown)"
+              : "Modified At"}
             value={metadata.capture.modifyDate}
             mono
           />
-          <MetadataField label="Date/Time Digitized" value={metadata.capture.dateTimeDigitized ?? null} mono />
+          <MetadataField label="Server Received Time" value={metadata.capture.serverReceivedAt ?? null} mono />
+          <MetadataField label="Server Staged File Created" value={fileSystemTimestamps?.stagedFileCreatedAt ?? null} mono />
+          <MetadataField label="Staged File Metadata Changed" value={fileSystemTimestamps?.stagedFileMetadataChangedAt ?? null} mono />
+          <MetadataField label="Staged File Modified" value={fileSystemTimestamps?.stagedFileModifiedAt ?? null} mono />
+          <p className="pt-1 text-xs text-muted-foreground">
+            Staging filesystem times describe the server-side copy, not the source device file.
+          </p>
         </div>
       </div>
 
@@ -90,6 +103,16 @@ export function ImageMetadata({ metadata }: ImageMetadataProps) {
             <div className="mt-4 rounded-md bg-secondary p-3 text-xs text-muted-foreground">
               Location is derived from image metadata and does not establish the capture location.
             </div>
+            {metadata.geographic.address && (
+              <div className="mt-4 space-y-2 text-sm">
+                <MetadataField label="Address" value={metadata.geographic.address.formatted} />
+                <MetadataField label="Country" value={metadata.geographic.address.country} />
+                <MetadataField label="Province / State" value={metadata.geographic.address.province} />
+                <MetadataField label="City" value={metadata.geographic.address.city} />
+                <MetadataField label="District" value={metadata.geographic.address.district} />
+                <MetadataField label="Road" value={metadata.geographic.address.road} />
+              </div>
+            )}
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -146,9 +169,9 @@ interface MetadataFieldProps {
 
 function MetadataField({ label, value, mono, status }: MetadataFieldProps) {
   return (
-    <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0">
-      <span className="text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-2">
+    <div className="flex items-start justify-between gap-4 border-b border-border/50 pb-2 last:border-0">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 items-center justify-end gap-2 text-right">
         {status && (
           <span
             className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
@@ -162,7 +185,7 @@ function MetadataField({ label, value, mono, status }: MetadataFieldProps) {
             {status}
           </span>
         )}
-        <span className={mono ? "font-mono text-foreground" : "text-foreground"}>
+        <span className={`break-all ${mono ? "font-mono text-foreground" : "text-foreground"}`}>
           {value ?? "Not available"}
         </span>
       </div>
