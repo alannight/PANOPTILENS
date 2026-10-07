@@ -17,7 +17,7 @@ export function ImageGallery({ images }: ImageGalleryProps) {
         >
           <div className="aspect-video overflow-hidden bg-secondary">
             <img
-              src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${image.url}`}
+              src={image.url}
               alt={image.filename}
               className="h-full w-full object-cover transition-transform group-hover:scale-105"
             />

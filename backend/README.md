@@ -24,24 +24,25 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Set `DATABASE_URL`, keep `APP_ENV=development` only on a trusted local machine, then apply migrations and run the API:
+Set `DATABASE_URL`, keep `APP_ENV=development` only on a trusted machine/private LAN, then apply migrations and run the API:
 
 ```bash
 ./venv/bin/alembic upgrade head
-./venv/bin/uvicorn app.main:app --reload --port 8000
+fastapi dev app/main.py --host 0.0.0.0
 ```
 
-Interactive API docs are available at `http://localhost:8000/docs`.
+The `--host 0.0.0.0` option is required for LAN access. Interactive API docs are available at `http://localhost:8000/docs`; allow TCP port 8000 through the host firewall when needed.
 
 ## Configuration and Safety
 
 - `MAX_UPLOAD_SIZE` defaults to 100 MiB and is enforced while streaming into temporary staging.
 - `MAX_IMAGE_PIXELS` defaults to 40 million decoded pixels.
+- Set `ADMIN_PASSWORD` to a strong secret to authorize image deletion. If unset, the development fallback is `Admin1234`; change the fallback by setting the environment variable before exposing the service, even on a private LAN.
 - File format is detected from content signatures and full decoding; browser MIME is not authoritative. HEIF/HEIC uses Pillow-HEIF. DNG/CR2/NEF/ARW additionally require camera metadata and successful LibRaw decoding.
 - Hashes are calculated from original upload bytes. Original files are stored locally under UUID-based names.
 - EXIF presence and hashes do not prove image authenticity. Metadata consistency is not assessed.
 
-Image endpoints deliberately fail closed outside `APP_ENV=development` because authentication and per-user authorization are not implemented. Development mode is unauthenticated and must never be exposed to a network. Uploaded files are not mounted as a public static directory.
+Image endpoints deliberately fail closed outside `APP_ENV=development` because authentication and per-user authorization are not implemented. Development mode is unauthenticated: use this network binding only on a trusted private LAN, and never forward the port to the internet. Uploaded files are not mounted as a public static directory.
 
 ## Tests
 

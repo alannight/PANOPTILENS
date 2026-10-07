@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { ImageMetadata } from "./image-metadata";
 import { ForensicAnalysis } from "./forensic-analysis";
 import { LocationMap } from "@/components/location-map";
+import { AdminPasswordDialog } from "@/components/admin-password-dialog";
 import {
   APIError,
   deleteImage,
@@ -33,6 +34,7 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
   const [savingAnnotations, setSavingAnnotations] = useState(false);
   const [integrity, setIntegrity] = useState<IntegrityVerification | null>(null);
   const [integrityError, setIntegrityError] = useState<string | null>(null);
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -100,13 +102,7 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
   };
 
   const moveToTrash = async () => {
-    if (!window.confirm("Move this image to Trash? It can be restored later.")) return;
-    try {
-      await deleteImage(imageId);
-      router.push("/images");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to move image to Trash.");
-    }
+    setShowDeletePassword(true);
   };
 
   // Loading state
@@ -205,6 +201,18 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
           {integrityError && <span role="alert" className="text-sm text-destructive">{integrityError}</span>}
         </div>
 
+        {showDeletePassword && (
+          <AdminPasswordDialog
+            title="Move image to Trash?"
+            description="Enter the admin password to move this evidence image to Trash. It can be restored later."
+            onCancel={() => setShowDeletePassword(false)}
+            onConfirm={async (password) => {
+              await deleteImage(imageId, password);
+              router.push("/images");
+            }}
+          />
+        )}
+
         {/* Split View */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Left: Image Preview */}
@@ -213,7 +221,7 @@ export function ImageAnalysisView({ imageId }: ImageAnalysisViewProps) {
               <div className="overflow-hidden rounded-lg border border-border bg-card">
                 <div className="aspect-[4/3] overflow-hidden bg-secondary">
                   <img
-                    src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${imageData.url}`}
+                    src={imageData.url}
                     alt={imageData.filename}
                     className="h-full w-full object-contain"
                     style={getExifOrientationStyle(imageData.metadata.image.orientation)}

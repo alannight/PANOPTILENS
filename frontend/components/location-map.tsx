@@ -10,6 +10,7 @@ interface LocationMapProps {
 
 export function LocationMap({ latitude, longitude, altitude }: LocationMapProps) {
   const osmLink = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=15/${latitude}/${longitude}`;
+  const googleMapsLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
   
   return (
     <div className="space-y-4">
@@ -49,6 +50,14 @@ export function LocationMap({ latitude, longitude, altitude }: LocationMapProps)
             className="text-accent hover:underline"
           >
             Open coordinates in OpenStreetMap
+          </a>
+          <a
+            href={googleMapsLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent hover:underline"
+          >
+            Open coordinates in Google Maps
           </a>
         </div>
       </div>

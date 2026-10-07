@@ -122,6 +122,9 @@ def _coordinate(values: Any, reference: Any, positive_ref: str, negative_ref: st
     if not (0 <= minutes < 60 and 0 <= seconds < 60):
         raise ValueError("Malformed GPS coordinate")
     result = degrees + minutes / 60 + seconds / 3600
+    if isinstance(reference, bytes):
+        reference = reference.decode("ascii", errors="ignore")
+    reference = str(reference).strip().strip("\x00").upper()
     if reference == negative_ref:
         result = -result
     elif reference != positive_ref:
@@ -150,6 +153,27 @@ def _raw_tag_value(tags: dict[str, Any], name: str) -> Any:
     if tag is None:
         return None
     return getattr(tag, "printable", str(tag))
+
+
+def _extract_exifread_gps(image_path: str | Path) -> tuple[dict[str, Any] | None, str, dict[str, Any]]:
+    try:
+        with Path(image_path).open("rb") as source:
+            tags = exifread.process_file(source, details=True, strict=False)
+    except Exception:
+        return None, "NOT_PRESENT", {}
+
+    gps_fields = {
+        "GPSLatitude": getattr(tags.get("GPS GPSLatitude"), "values", None),
+        "GPSLatitudeRef": _raw_tag_value(tags, "GPS GPSLatitudeRef"),
+        "GPSLongitude": getattr(tags.get("GPS GPSLongitude"), "values", None),
+        "GPSLongitudeRef": _raw_tag_value(tags, "GPS GPSLongitudeRef"),
+        "GPSAltitude": getattr(tags.get("GPS GPSAltitude"), "values", [None])[0],
+        "GPSAltitudeRef": _raw_tag_value(tags, "GPS GPSAltitudeRef"),
+        "GPSTimeStamp": getattr(tags.get("GPS GPSTimeStamp"), "values", None),
+        "GPSImgDirection": getattr(tags.get("GPS GPSImgDirection"), "values", [None])[0],
+    }
+    gps, status = MetadataExtractor._extract_gps(gps_fields)
+    return gps, status, gps_fields
 
 
 def _extract_raw_metadata(image_path: str | Path, filename: str | None) -> dict[str, Any]:
@@ -272,6 +296,16 @@ class MetadataExtractor:
                 filename_datetime = infer_filename_datetime(filename or Path(image_path).name)
 
                 gps, gps_status = MetadataExtractor._extract_gps(gps_fields)
+                if gps_status != "PRESENT":
+                    fallback_gps, fallback_status, fallback_fields = _extract_exifread_gps(image_path)
+                    if fallback_status == "PRESENT" or (gps_status == "NOT_PRESENT" and fallback_status == "INVALID"):
+                        gps, gps_status = fallback_gps, fallback_status
+                        if fallback_fields:
+                            raw["GPSInfo"] = {
+                                key: _json_value(value)
+                                for key, value in fallback_fields.items()
+                                if value is not None
+                            }
                 make = fields.get("Make") or xmp.get("Make")
                 model = fields.get("Model") or xmp.get("Model")
                 software = fields.get("Software") or xmp.get("Software") or xmp.get("CreatorTool")

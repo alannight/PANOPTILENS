@@ -236,6 +236,57 @@ def test_real_gps_exif_survives_upload_and_detail(client):
     assert detail["metadata"]["geographic"] == gps
 
 
+def test_image_detail_repairs_previously_invalid_gps(client):
+    from app.models.image import ImageMetadata
+
+    upload = client.post(
+        "/api/images/upload",
+        files={"file": ("legacy-gps.jpg", jpeg_with_gps_bytes(), "image/jpeg")},
+    )
+    assert upload.status_code == 200, upload.text
+    image_id = upload.json()["id"]
+
+    session_generator = app.dependency_overrides[get_db]()
+    session = next(session_generator)
+    try:
+        metadata = session.query(ImageMetadata).filter_by(image_id=image_id).one()
+        metadata.gps_status = "INVALID"
+        metadata.gps_latitude = None
+        metadata.gps_longitude = None
+        session.commit()
+    finally:
+        session_generator.close()
+
+    detail = client.get(f"/api/images/{image_id}")
+
+    assert detail.status_code == 200, detail.text
+    metadata = detail.json()["metadata"]
+    assert metadata["gpsStatus"] == "PRESENT"
+    assert metadata["geographic"]["latitude"] == pytest.approx(-6.2029166667)
+    assert metadata["geographic"]["longitude"] == pytest.approx(106.8166666667)
+
+
+def test_exifread_gps_fallback_produces_decimal_coordinates(monkeypatch, tmp_path):
+    from app.services.metadata_extractor import MetadataExtractor
+
+    image_path = tmp_path / "fallback.jpg"
+    image_path.write_bytes(jpeg_with_exif_bytes())
+    tags = {
+        "GPS GPSLatitude": SimpleNamespace(values=[(6, 1), (12, 1), (105, 10)]),
+        "GPS GPSLatitudeRef": SimpleNamespace(printable="S"),
+        "GPS GPSLongitude": SimpleNamespace(values=[(106, 1), (49, 1), (0, 1)]),
+        "GPS GPSLongitudeRef": SimpleNamespace(printable="E"),
+    }
+    monkeypatch.setattr("app.services.metadata_extractor.exifread.process_file", lambda *args, **kwargs: tags)
+
+    metadata = MetadataExtractor.extract_exif(image_path)
+
+    assert metadata["gpsStatus"] == "PRESENT"
+    assert metadata["geographic"]["latitude"] == pytest.approx(-6.2029166667)
+    assert metadata["geographic"]["longitude"] == pytest.approx(106.8166666667)
+    assert metadata["fieldSources"]["gps.coordinates"] == "EXIF:GPSInfo"
+
+
 @pytest.mark.parametrize("image_format,filename,mime_type", [
     ("JPEG", "test.jpg", "image/jpeg"),
     ("PNG", "test.png", "image/png"),
@@ -434,13 +485,13 @@ def test_gps_signs_and_range():
     from app.services.metadata_extractor import MetadataExtractor
 
     gps, status = MetadataExtractor._extract_gps({
-        "GPSLatitude": ((6, 1), (12, 1), (105, 10)),
-        "GPSLatitudeRef": "S",
+        "GPSLatitude": ((34, 1), (3, 1), (4555, 100)),
+        "GPSLatitudeRef": b"S\x00",
         "GPSLongitude": ((106, 1), (49, 1), (0, 1)),
-        "GPSLongitudeRef": "E",
+        "GPSLongitudeRef": b"E",
     })
     assert status == "PRESENT"
-    assert gps["latitude"] == pytest.approx(-6.2029166667)
+    assert gps["latitude"] == pytest.approx(-34.0626527778)
     assert gps["longitude"] == pytest.approx(106.8166666667)
 
     invalid, invalid_status = MetadataExtractor._extract_gps({
@@ -451,6 +502,22 @@ def test_gps_signs_and_range():
     })
     assert invalid is None
     assert invalid_status == "INVALID"
+
+
+def test_image_delete_requires_admin_password(client, monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "Admin1234")
+    upload = client.post(
+        "/api/images/upload",
+        files={"file": ("delete-me.png", png_bytes(), "image/png")},
+    )
+    assert upload.status_code == 200, upload.text
+    image_id = upload.json()["id"]
+    endpoint = f"/api/images/{image_id}"
+
+    assert client.delete(endpoint).status_code == 401
+    assert client.delete(endpoint, headers={"X-Admin-Password": "wrong"}).status_code == 401
+    assert client.delete(endpoint, headers={"X-Admin-Password": "Admin1234"}).status_code == 200
+    assert client.delete("/api/images/trash/empty/all").status_code == 401
 
 
 def test_capture_timestamps_preserve_offsets_and_event_provenance():
@@ -552,7 +619,9 @@ def test_annotations_and_integrity_verification(client, tmp_path):
     assert tampered.json()["actualSha256"] != tampered.json()["expectedSha256"]
 
 
-def test_soft_delete_restore_hard_delete_and_audit(client, tmp_path):
+def test_soft_delete_restore_hard_delete_and_audit(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "Admin1234")
+    admin_headers = {"X-Admin-Password": "Admin1234"}
     upload = client.post(
         "/api/images/upload",
         files={"file": ("lifecycle.png", png_bytes(), "image/png")},
@@ -561,7 +630,7 @@ def test_soft_delete_restore_hard_delete_and_audit(client, tmp_path):
     stored_file = next((tmp_path / "uploads").glob("*.png"))
     assert stored_file.exists()
 
-    deleted = client.delete(f"/api/images/{image_id}")
+    deleted = client.delete(f"/api/images/{image_id}", headers=admin_headers)
     assert deleted.status_code == 200
     assert deleted.json()["isDeleted"] is True
     assert client.get("/api/images/").json() == []
@@ -573,8 +642,8 @@ def test_soft_delete_restore_hard_delete_and_audit(client, tmp_path):
     assert restored.json()["isDeleted"] is False
     assert len(client.get("/api/images/").json()) == 1
 
-    client.delete(f"/api/images/{image_id}")
-    hard_delete = client.delete(f"/api/images/trash/{image_id}")
+    client.delete(f"/api/images/{image_id}", headers=admin_headers)
+    hard_delete = client.delete(f"/api/images/trash/{image_id}", headers=admin_headers)
     assert hard_delete.status_code == 200, hard_delete.text
     assert not stored_file.exists()
     assert client.get(f"/api/images/{image_id}").status_code == 404
@@ -583,15 +652,17 @@ def test_soft_delete_restore_hard_delete_and_audit(client, tmp_path):
     assert [entry["action"] for entry in audit.json()] == ["SOFT_DELETE", "SOFT_DELETE", "HARD_DELETE"]
 
 
-def test_empty_trash_permanently_removes_files(client, tmp_path):
+def test_empty_trash_permanently_removes_files(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "Admin1234")
+    admin_headers = {"X-Admin-Password": "Admin1234"}
     upload = client.post(
         "/api/images/upload",
         files={"file": ("trash.png", png_bytes(), "image/png")},
     )
     stored_file = next((tmp_path / "uploads").glob("*.png"))
-    client.delete(f"/api/images/{upload.json()['id']}")
+    client.delete(f"/api/images/{upload.json()['id']}", headers=admin_headers)
 
-    emptied = client.delete("/api/images/trash/empty/all")
+    emptied = client.delete("/api/images/trash/empty/all", headers=admin_headers)
     assert emptied.status_code == 200
     assert len(emptied.json()["deleted"]) == 1
     assert emptied.json()["failed"] == []

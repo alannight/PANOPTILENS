@@ -3,7 +3,7 @@
  * Centralized API communication layer for frontend-backend integration
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = '';
 
 /**
  * API Error class for structured error handling
@@ -271,9 +271,10 @@ export async function getImages(caseId?: string): Promise<ImageResponse[]> {
 /**
  * Delete an image by ID
  */
-export async function deleteImage(imageId: string): Promise<void> {
+export async function deleteImage(imageId: string, adminPassword: string): Promise<void> {
   return apiRequest<void>(`/api/images/${imageId}`, {
     method: 'DELETE',
+    headers: { 'X-Admin-Password': adminPassword },
   });
 }
 
@@ -285,12 +286,18 @@ export async function restoreImage(imageId: string): Promise<ImageResponse> {
   return apiRequest<ImageResponse>(`/api/images/trash/${imageId}/restore`, { method: "POST" });
 }
 
-export async function hardDeleteImage(imageId: string): Promise<void> {
-  return apiRequest<void>(`/api/images/trash/${imageId}`, { method: "DELETE" });
+export async function hardDeleteImage(imageId: string, adminPassword: string): Promise<void> {
+  return apiRequest<void>(`/api/images/trash/${imageId}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Password": adminPassword },
+  });
 }
 
-export async function emptyTrash(): Promise<{ deleted: string[]; failed: Array<{ id: string; message: string }> }> {
-  return apiRequest("/api/images/trash/empty/all", { method: "DELETE" });
+export async function emptyTrash(adminPassword: string): Promise<{ deleted: string[]; failed: Array<{ id: string; message: string }> }> {
+  return apiRequest("/api/images/trash/empty/all", {
+    method: "DELETE",
+    headers: { "X-Admin-Password": adminPassword },
+  });
 }
 
 export async function updateImageAnnotations(

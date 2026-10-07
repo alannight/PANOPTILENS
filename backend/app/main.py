@@ -13,10 +13,17 @@ app = FastAPI(
 
 # CORS Configuration
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+lan_origin_regex = (
+    r"^https?://(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+    r"172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|"
+    r"192\.168\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3})"
+    r"(?::\d+)?$"
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=lan_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

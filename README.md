@@ -34,6 +34,12 @@ The overview dashboard still contains demo values. Validation and hashes are use
 
 See [GETTING_STARTED.md](GETTING_STARTED.md) for local setup, [ARCHITECTURE.md](ARCHITECTURE.md) for the implemented pipeline and trust boundaries, and [TESTING_GUIDE.md](TESTING_GUIDE.md) for checks and coverage. Backend-specific setup and API details are in [backend/README.md](backend/README.md).
 
+## Trusted LAN Development
+
+On a trusted private Wi-Fi network, start the backend from `backend/` with `fastapi dev app/main.py --host 0.0.0.0`. The `--host 0.0.0.0` option is required for LAN access. Start the frontend from `frontend/` with `npm run dev -- -p 3000 -H 0.0.0.0`. Open `http://<host-LAN-IP>:3000` on the other device. Next.js proxies API requests to `http://localhost:8000` by default; set `API_PROXY_TARGET` if the backend listens elsewhere. Allow TCP ports 3000 and 8000 through the host firewall as needed.
+
+The backend's development image endpoints are unauthenticated. Use only on a trusted private LAN, and do not forward these ports to the internet.
+
 ## Project Map
 
 ```text

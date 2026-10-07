@@ -12,6 +12,7 @@ from pathlib import Path
 import logging
 
 from app.database import get_db
+from app.api.security import require_admin_password
 from app.models.image import Image, ImageHash, ImageMetadata, ForensicAnalysis, ImageDeletionAudit
 from app.models.case import Case
 from app.services.metadata_extractor import MetadataExtractor, parse_exif_datetime
@@ -80,6 +81,46 @@ def _hard_delete_image(db: Session, image: Image) -> None:
 
 def _parse_exif_datetime(value: Optional[str], offset: Optional[str] = None) -> Optional[datetime]:
     return parse_exif_datetime(value, offset)
+
+
+def _repair_invalid_gps(image: Image, db: Session, geocoder: GeocodingProvider) -> None:
+    metadata = image.image_metadata
+    if metadata is None or metadata.gps_status != "INVALID":
+        return
+    image_path = storage_service.get(image.storage_path)
+    if image_path is None:
+        return
+
+    extracted = MetadataExtractor.extract_exif(image_path, image.original_filename)
+    geographic = extracted.get("geographic")
+    if not geographic:
+        return
+
+    metadata.gps_latitude = str(geographic["latitude"])
+    metadata.gps_longitude = str(geographic["longitude"])
+    metadata.gps_altitude = str(geographic["altitude"]) if geographic["altitude"] is not None else None
+    metadata.gps_timestamp = geographic["gpsTimestamp"]
+    metadata.gps_direction = str(geographic["direction"]) if geographic["direction"] is not None else None
+    metadata.gps_status = extracted["gpsStatus"]
+    try:
+        raw = json.loads(metadata.raw_exif or "{}")
+    except (TypeError, json.JSONDecodeError):
+        raw = {}
+    raw["GPSInfo"] = extracted["raw"].get("GPSInfo", {})
+    metadata.raw_exif = json.dumps(raw, ensure_ascii=False)
+    try:
+        address = geocoder.reverse_geocode(geographic["latitude"], geographic["longitude"])
+    except Exception:
+        logger.exception("GPS reverse geocoding failed for image %s", image.id)
+        address = None
+    if address:
+        metadata.address_country = address.get("country")
+        metadata.address_province = address.get("province")
+        metadata.address_city = address.get("city")
+        metadata.address_district = address.get("district")
+        metadata.address_road = address.get("road")
+        metadata.address_formatted = address.get("formatted")
+    db.commit()
 
 
 def _image_response(image: Image) -> ImageResponse:
@@ -424,13 +465,18 @@ async def list_trash(db: Session = Depends(get_db)):
 
 
 @router.get("/{image_id}", response_model=ImageResponse)
-async def get_image(image_id: str, db: Session = Depends(get_db)):
+async def get_image(
+    image_id: str,
+    db: Session = Depends(get_db),
+    geocoder: GeocodingProvider = Depends(get_geocoding_provider),
+):
     """Get image details by ID"""
     image = db.query(Image).filter(Image.id == image_id, Image.is_deleted.is_(False)).first()
     if not image:
         return _error("IMAGE_NOT_FOUND", "Image was not found.", status.HTTP_404_NOT_FOUND)
     if not image.hashes or not image.image_metadata:
         return _error("INTERNAL_ERROR", "Image analysis data is unavailable.", status.HTTP_500_INTERNAL_SERVER_ERROR)
+    _repair_invalid_gps(image, db, geocoder)
     return _image_response(image)
 
 
@@ -531,7 +577,11 @@ async def get_image_file(image_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{image_id}")
-async def delete_image(image_id: str, db: Session = Depends(get_db)):
+async def delete_image(
+    image_id: str,
+    db: Session = Depends(get_db),
+    _admin: None = Depends(require_admin_password),
+):
     """Move an image to trash while recording an immutable deletion event."""
     image = db.query(Image).filter(Image.id == image_id).first()
     if not image:
@@ -565,7 +615,11 @@ async def restore_image(image_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/trash/{image_id}")
-async def hard_delete_image(image_id: str, db: Session = Depends(get_db)):
+async def hard_delete_image(
+    image_id: str,
+    db: Session = Depends(get_db),
+    _admin: None = Depends(require_admin_password),
+):
     image = db.query(Image).filter(Image.id == image_id, Image.is_deleted.is_(True)).first()
     if not image:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trashed image not found")
@@ -578,7 +632,10 @@ async def hard_delete_image(image_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/trash/empty/all")
-async def empty_trash(db: Session = Depends(get_db)):
+async def empty_trash(
+    db: Session = Depends(get_db),
+    _admin: None = Depends(require_admin_password),
+):
     images = db.query(Image).filter(Image.is_deleted.is_(True)).all()
     deleted = []
     failed = []

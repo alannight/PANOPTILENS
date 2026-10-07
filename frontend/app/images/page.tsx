@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ImageUpload } from "@/features/images/image-upload";
 import { ImageGallery } from "@/features/images/image-gallery";
+import { AdminPasswordDialog } from "@/components/admin-password-dialog";
 import {
   APIError,
   CaseResponse,
@@ -26,6 +27,7 @@ export default function ImagesPage() {
   const [caseFilter, setCaseFilter] = useState("");
   const [caseName, setCaseName] = useState("");
   const [view, setView] = useState<"images" | "trash">("images");
+  const [passwordAction, setPasswordAction] = useState<{ type: "single"; imageId: string } | { type: "empty" } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -87,24 +89,25 @@ export default function ImagesPage() {
   };
 
   const handleHardDelete = async (imageId: string) => {
-    if (!window.confirm("Permanently delete this evidence file and its record?")) return;
-    try {
-      await hardDeleteImage(imageId);
-      setImages((current) => current.filter((image) => image.id !== imageId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Permanent deletion failed.");
-    }
+    setPasswordAction({ type: "single", imageId });
   };
 
   const handleEmptyTrash = async () => {
-    if (!window.confirm(`Permanently delete all ${images.length} trashed images? This cannot be undone.`)) return;
-    try {
-      const result = await emptyTrash();
-      setImages((current) => current.filter((image) => result.failed.some((failure) => failure.id === image.id)));
-      if (result.failed.length) setError(`${result.failed.length} files could not be permanently removed.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to empty trash.");
+    setPasswordAction({ type: "empty" });
+  };
+
+  const confirmDelete = async (password: string) => {
+    if (!passwordAction) return;
+    if (passwordAction.type === "single") {
+      await hardDeleteImage(passwordAction.imageId, password);
+      setImages((current) => current.filter((image) => image.id !== passwordAction.imageId));
+      setPasswordAction(null);
+      return;
     }
+    const result = await emptyTrash(password);
+    setImages((current) => current.filter((image) => result.failed.some((failure) => failure.id === image.id)));
+    if (result.failed.length) setError(`${result.failed.length} files could not be permanently removed.`);
+    setPasswordAction(null);
   };
 
   return (
@@ -204,6 +207,17 @@ export default function ImagesPage() {
             <AlertCircle className="h-4 w-4" />
             {error}
           </div>
+        )}
+
+        {passwordAction && (
+          <AdminPasswordDialog
+            title={passwordAction.type === "empty" ? "Empty Trash?" : "Delete evidence permanently?"}
+            description={passwordAction.type === "empty"
+              ? `Permanently delete all ${images.length} trashed images. This cannot be undone.`
+              : "Permanently delete this evidence file and its record. This cannot be undone."}
+            onCancel={() => setPasswordAction(null)}
+            onConfirm={confirmDelete}
+          />
         )}
 
         {loading ? (
