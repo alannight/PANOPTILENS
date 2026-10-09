@@ -11,8 +11,10 @@ from typing import Any
 
 import exifread
 from PIL import ExifTags, Image
+from pillow_heif import register_heif_opener
 
 logger = logging.getLogger(__name__)
+register_heif_opener()
 FILENAME_DATETIME_PATTERNS = (
     re.compile(r"(?:^|[^A-Z0-9])(?:IMG|PXL)[_-](?P<date>20\d{6})[_-](?P<time>\d{6})(?:[^0-9]|$)", re.IGNORECASE),
     re.compile(r"(?:^|[^A-Z0-9])Screenshot[_-](?P<date>20\d{6})[-_](?P<time>\d{6})(?:[^0-9]|$)", re.IGNORECASE),
